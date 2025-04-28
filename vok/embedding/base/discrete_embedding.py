@@ -8,11 +8,11 @@ from pymongo import UpdateOne
 from dawn_vok.db.mongo_utils import MongoUtils
 from dawn_vok.utils.dict_utils import DictUtils
 from dawn_vok.utils.id_utils import IDUtils
-from dawn_vok.vok.embedding.syntax.syntax_formater import SyntaxFormater
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
+from dawn_vok.vok.embedding.encoders.syntax_formater import SyntaxFormater
 from dawn_vok.vok.v_objects.vobjects.formulations.v_agg import VOKFormulation
 from dawn_vok.vok.v_objects.vobjects.measurments.v_measurment_unit import MeasurementUnit
 from dawn_vok.vok.v_objects.vobjects.sensors.v_base_sensor_type import VOKBaseSensorType

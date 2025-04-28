@@ -57,7 +57,7 @@ class UniqueID:
         return torch.tensor(hashed_int, dtype=torch.long)
 
 class IDUtils:
-    _TRANS_TABLE = str.maketrans({
+    _BASE_TRANS = {
         ' ': '_',
         '-': '_',
         '.': '_',
@@ -65,7 +65,46 @@ class IDUtils:
         ':': '_',
         '°': '',    # strip degree symbol
         '%': '',    # strip percent sign
-    })
+    }
+    _TRANS_TABLE = str.maketrans(_BASE_TRANS)
+
+    @staticmethod
+    def clean_str(s: str, include: list = [], exclude: list = []):
+        
+        if include or exclude:
+            table = IDUtils._BASE_TRANS.copy()
+            if include:
+                for c in include:
+                    table[c] = '_'
+            if exclude:
+                for c in exclude:
+                    del table[c]
+            table = str.maketrans(table)
+            s = s.translate(table)
+            return s.lower()
+        else:
+            return s.translate(IDUtils._TRANS_TABLE).lower()
+    
+    # @staticmethod
+    # def clean_dict(di, clean_values: bool = True):
+    #     if not isinstance(di, dict):
+    #         if isinstance(di, list):
+    #             return [IDUtils.clean_str(item) for item in di]
+    #         else:
+    #             return di
+    #     elif isinstance(di, dict):
+    #         for k, v in di.items():
+    #             if clean_values:
+    #                 di[IDUtils.clean_str(k)] = IDUtils.clean_str(v)
+    #             else:
+    #                 di[IDUtils.clean_str(k)] = v
+    #         return di
+    #             return {IDUtils.clean_str(k): v for k, v in di.items()}
+    
+    #         return {IDUtils.clean_str(k): IDUtils.clean_str(v) for k, v in di.items()}
+    #     else:
+    #         return {IDUtils.clean_str(k): v for k, v in di.items()}
+    
     @staticmethod
     def get_id(data: dict | list | str | float):
         if not data:

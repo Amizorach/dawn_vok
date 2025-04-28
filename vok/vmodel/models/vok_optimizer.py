@@ -3,7 +3,7 @@ import torch.optim as optim
 class VOptimizer:
     def __init__(self, model, lr=1e-3):
         self.model = model
-        self.optimizer = optim.Adam(self.model.model.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
 
 class SmartLROptimizer(VOptimizer):
@@ -24,5 +24,5 @@ class SmartLROptimizer(VOptimizer):
         if self.no_improvement_epochs > 100:
             self.lr *= 0.1
             self.no_improvement_epochs = 0
-            self.optimizer = optim.Adam(self.model.model.parameters(), lr=self.lr)
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         

@@ -13,7 +13,7 @@ class Plotter:
         plot_results_axis=True,  # Renamed flag
         single_plot_figsize=(7, 5),
         combined_figsize=(12, 5),
-        num_samples_to_plot=4  # New parameter for number of random samples
+        num_samples_to_plot=1  # New parameter for number of random samples
     ):
         """
         Initializes the plot figure and axes based on flags.
@@ -81,34 +81,36 @@ class Plotter:
         if not self.plot_results_axis or self.fig is None:
             return
 
-        # Clear previous result axes
+        # 1) REMOVE old result axes entirely
         for ax in self.results_axes:
-            ax.remove()
+            self.fig.delaxes(ax)
         self.results_axes.clear()
 
-        # Validate tensors
-        if not isinstance(gts, torch.Tensor) or not isinstance(preds, torch.Tensor):
+        # 2) CLEAR and HIDE the placeholder
+        self.ax_results_placeholder.clear()
+        self.ax_results_placeholder.set_visible(False)
+
+        # 3) VALIDATE inputs
+        if not (isinstance(gts, torch.Tensor) and isinstance(preds, torch.Tensor)):
             print("Warning: plot_results expects PyTorch tensors for gts and preds.")
-            if self.ax_results_placeholder:
-                self.ax_results_placeholder.set_visible(True)
-                self.ax_results_placeholder.text(0.5, 0.5, 'Invalid Input',
-                                                 ha='center', va='center', fontsize=12)
+            self.ax_results_placeholder.set_visible(True)
+            self.ax_results_placeholder.text(0.5, 0.5, 'Invalid Input',
+                                             ha='center', va='center', fontsize=12)
             return
 
         batch_size = gts.shape[0]
         if batch_size == 0 or preds.shape[0] == 0:
             print("Warning: gts or preds tensor is empty.")
-            if self.ax_results_placeholder:
-                self.ax_results_placeholder.set_visible(True)
-                self.ax_results_placeholder.text(0.5, 0.5, 'Empty Input',
-                                                 ha='center', va='center', fontsize=12)
+            self.ax_results_placeholder.set_visible(True)
+            self.ax_results_placeholder.text(0.5, 0.5, 'Empty Input',
+                                             ha='center', va='center', fontsize=12)
             return
 
-        # Random sampling
+        # 4) SAMPLE indices
         n_plot = min(self.num_samples_to_plot, batch_size)
         indices = random.sample(range(batch_size), k=n_plot)
 
-        # Determine grid layout
+        # 5) GRID layout
         if grid_layout:
             rows, cols = grid_layout
             if rows * cols < n_plot:
@@ -118,33 +120,37 @@ class Plotter:
             rows = 1 if n_plot <= 2 else 2
             cols = math.ceil(n_plot / rows)
 
-        # Setup GridSpec
-        gs = self.ax_results_placeholder.get_gridspec()
-        sub_gs = gs[0].subgridspec(rows, cols, wspace=0.4, hspace=0.4)
-        self.ax_results_placeholder.set_visible(False)
+        # 6) MAKE a fresh GridSpec for just the results region
+        #    Adjust top/bottom/left/right as needed to leave room for loss axis
+        gs = self.fig.add_gridspec(
+            nrows=rows, ncols=cols,
+            top=0.90, bottom=0.10, left=0.55, right=0.98,
+            wspace=0.4, hspace=0.4
+        )
 
-        # Plot each sampled example
+        # 7) CREATE each subplot in the new GridSpec
         for i, idx in enumerate(indices):
-            ax = self.fig.add_subplot(sub_gs[i // cols, i % cols])
+            r, c = divmod(i, cols)
+            ax = self.fig.add_subplot(gs[r, c])
             self.results_axes.append(ax)
 
             gt = gts[idx].detach().cpu().numpy()
             pr = preds[idx].detach().cpu().numpy()
 
             ax.plot(gt, linestyle='--', marker='.', markersize=4, label='Ground-Truth')
-            ax.plot(pr, linestyle='-', marker='.', markersize=4, label='Prediction')
-            ax.set_title(f"Sample {idx}")
-            ax.tick_params(axis='both', which='major', labelsize=8)
-            if i // cols == rows - 1:
-                ax.set_xlabel("Dimension", fontsize=9)
-            if i % cols == 0:
-                ax.set_ylabel("Value", fontsize=9)
+            ax.plot(pr, linestyle='-',  marker='.', markersize=4, label='Prediction')
+            ax.set_title(f"Sample {idx}", fontsize=8)
+            ax.tick_params(axis='both', which='major', labelsize=7)
             ax.grid(True, linestyle=':', linewidth=0.5)
+            if r == rows - 1:
+                ax.set_xlabel("Dim", fontsize=7)
+            if c == 0:
+                ax.set_ylabel("Val", fontsize=7)
+            if i == 0:
+                ax.legend(fontsize=6, loc='upper right')
 
-        try:
-            self.fig.tight_layout(pad=2.0)
-        except ValueError:
-            print("Warning: tight_layout failed. Plots might overlap.")
+        # 8) FINISH
+        self.fig.tight_layout()
 
     def update(self):
         """Redraw canvas."""
@@ -153,7 +159,7 @@ class Plotter:
         self.fig.canvas.draw_idle()
         plt.pause(0.01)
 
-    def finalize(self):
+    def finalize(self, wait=False):
         """Finalize interactive plot."""
         if not self.fig:
             return
@@ -161,7 +167,10 @@ class Plotter:
         if self._interactive_mode:
             plt.ioff()
             self._interactive_mode = False
-        plt.show()
+        if wait:
+            plt.show()
+        else:
+            plt.close()
 
     def save_plot(self, filename="plot.png"):
         """Save figure to file."""

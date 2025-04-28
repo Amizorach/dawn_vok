@@ -77,34 +77,34 @@ class RawDataSampleCreator:
                 # 2) skip if all entries are the same value
               
 
-                if add_embeddings:
-                    print('will add embeddings')
-                    # start_time = sample.index[0]
-                    # end_time = start_time + timedelta(seconds=freq*143)
-                    # for col in sample.columns:
-                        
-                    #     data_request_embedding = DataRequestEmbedding(source_id=source_id, sensor_type=col, start_time=start_time, end_time=end_time)
-                    #     embedding_di = data_request_embedding.get_embedding()
-                    #     if embedding_di is None:
-                    #         continue
-                    #     samp = sample[col].values
-                    #     #normalize this between 0 and 1
-                    #     if  min(samp) == max(samp):
-                    #         print(f"Sample {i} is all the same value, skipping")
-                    #         continue
-                    #     samp = (samp - samp.min()) / (samp.max() - samp.min())
-                    #     samples.append(samp)
-                    #     full_embeddings.append(embedding_di)
+                # if add_embeddings:
+                #     print('will add embeddings')
+                start_time = sample.index[0]
+                end_time = start_time + timedelta(seconds=freq*143)
+                for col in sample.columns:
+                    
+                    #data_request_embedding = DataRequestEmbedding(source_id=source_id, sensor_type=col, start_time=start_time, end_time=end_time)
+                    # embedding_di = data_request_embedding.get_embedding()
+                    # if embedding_di is None:
+                    #     continue
+                    samp = sample[col].values
+                    #normalize this between 0 and 1
+                    if  min(samp) == max(samp):
+                        print(f"Sample {i} is all the same value, skipping")
+                        continue
+                    samp = (samp - samp.min()) / (samp.max() - samp.min())
+                    samples.append(samp)
+                    # full_embeddings.append(embedding_di)
 
-                    #     embeddings.append({'sensor':col, 'start_time':sample.index[0]})
-                provider_samples.append(sample)
+                    embeddings.append({'sensor':col, 'start_time':sample.index[0]})
+                    provider_samples.append(samp)
         
             print(f'{source_id}: embeddings: {len(embeddings)}, samples: {len(samples)}, provider_samples: {len(provider_samples)}')
             if not provider_samples:
                 continue
 
             if shuffle:
-                mask = np.random.choice(len(provider_samples), size=max_samples, replace=False)
+                mask = np.random.choice(len(provider_samples), size=min(max_samples, len(provider_samples)), replace=False)
                 provider_samples = [provider_samples[i] for i in mask]
                 if add_embeddings:
                     full_embeddings = [full_embeddings[i] for i in mask]
@@ -137,8 +137,9 @@ if __name__ == "__main__":
     #create samples
     sampler = RawDataSampleCreator(source_ids=None,
                                     sensor_types=['temperature', 'humidity'], start_date='2024-01-04', end_date='2024-10-05', frequency=10*60, agg='mean')
-    samples, embeddings, full_embeddings = sampler.create_samples(sample_size=144, sample_resolution=6, max_samples=1000, max_samples_per_provider=-1, 
+    samples, embeddings, full_embeddings = sampler.create_samples(sample_size=144, sample_resolution=1, max_samples=10000, max_samples_per_provider=-1, 
                                                                   add_embeddings=False, shuffle=True, shuffle_providers=True)
     print(f'samples: {len(samples)}, embeddings: {len(embeddings)}, full_embeddings: {len(full_embeddings)}')
+    print(len(samples[0]))
     exit()
     

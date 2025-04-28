@@ -2,6 +2,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 
+
 class CyclicEncoder:
     """
     Encodes scalar values on a circular domain into 2D vectors using sine and cosine.

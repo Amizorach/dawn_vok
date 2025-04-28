@@ -4,7 +4,6 @@ import pprint
 import numpy as np
 from dawn_vok.db.mongo_utils import MongoUtils
 from dawn_vok.utils.id_utils import IDUtils
-from dawn_vok.vok.dobjects.d_object import DObject
 from dawn_vok.vok.dobjects.dobj.config.sensor_type_conf import SensorTypeConfig
 from dawn_vok.vok.v_objects.vobjects.sensors.sensor_config import SensorConfig
 from dawn_vok.vok.v_objects.vok_object import VOKObject
@@ -74,7 +73,7 @@ class VOKSensorType(VOKObject):
         sensor_types = []
         for st in SensorTypeConfig.type_info:
             uid = st['uid']
-            st = SensorType(uid, st)
+            st = VOKSensorType(uid, st)
             st.update_syntax_directives()
             sensor_types.append(st)
 
@@ -94,7 +93,7 @@ class VOKSensorType(VOKObject):
     
 
 
-if __name__ == "__main__":
-    SensorType.create_all_sensor_types()
+# if __name__ == "__main__":
+#     SensorType.create_all_sensor_types()
 
   

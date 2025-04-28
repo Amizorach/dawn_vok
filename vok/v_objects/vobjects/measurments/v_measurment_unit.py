@@ -53,6 +53,6 @@ class MeasurementUnit(VOKObject):
         MongoUtils.update_many(cls.get_db_name(), cls.get_collection_name(), measurement_units)
         return measurement_units
     
-
+    
 if __name__ == '__main__':
     MeasurementUnit.create_all_measurement_units()

@@ -1,7 +1,213 @@
 import math
+import random
 import numpy as np
 from datetime import datetime, timedelta
 
+import torch
+
+from dawn_vok.utils.dict_utils import DictUtils
+from dawn_vok.vok.embedding.static_emb.frequency_encoding import FrequencyEncoding
+from dawn_vok.vok.v_objects.vok_object import VOKObject
+
+
+
+class BaseEncoderValues:
+    encoder_configs = {
+        "time_stamp_encoder": {
+            "min_year": 1990,
+            "max_year": 2029,
+            "info_map": {
+                0: "year_norm",
+                1: "month_norm",
+                2: "month_sin",
+                3: "month_cos",
+                4: "day_norm",
+                5: "day_sin",
+                6: "day_cos",
+                7: "hour_norm",
+                8: "hour_sin",
+                9: "hour_cos",
+                10: "minute_norm",
+                11: "minute_sin",
+                12: "minute_cos",
+                13: "since_start_norm",
+                14: "since_start_sin",
+                15: "since_start_cos",
+            }
+        }
+    }
+    
+class VOKStructuredEncoder(VOKObject):
+    @classmethod
+    def get_db_name(cls):
+        return 'embeddings'
+    
+    @classmethod
+    def get_collection_name(cls):
+        return 'structured_encoders'
+    
+    def __init__(self, uid=None, info_map=None, config=None):
+        super().__init__(uid=uid, obj_type="structured_encoder", name="structured_encoder")
+        self.config = config or self.get_config()
+        self.info_map = info_map or self.config.get("info_map", {})
+    
+    def to_dict(self):
+        ret = super().to_dict()
+        ret["info_map"] = self.info_map
+        return ret
+    
+    def populate_from_dict(self, d):
+        super().populate_from_dict(d)
+        self.info_map = d["info_map"]
+
+    def encode(self, dt):
+        raise NotImplementedError("Subclasses must implement this method")
+    
+    def decode(self, v):
+        raise NotImplementedError("Subclasses must implement this method")
+    
+    
+
+class TimeStampEncoder(VOKStructuredEncoder):
+
+    @classmethod
+    def get_config(cls):
+        return {
+            "min_year": 1990,
+            "max_year": 2029,
+            "info_map": {
+                0: "year_norm",
+                1: "month_norm",
+                2: "month_sin",
+                3: "month_cos",
+                4: "day_norm",
+                5: "day_sin",
+                6: "day_cos",
+                7: "hour_norm",
+                8: "hour_sin",
+                9: "hour_cos",
+                10: "minute_norm",
+                11: "minute_sin",
+                12: "minute_cos",
+                13: "since_start_norm",
+                14: "since_start_sin",
+                15: "since_start_cos",
+            }
+        }
+    
+    def __init__(self):
+        uid = "time_stamp_encoder"  
+        super().__init__(uid=uid)
+        self.min_year = self.config["min_year"]
+        self.max_year = self.config["max_year"]
+        self.year_range = self.max_year - self.min_year
+        self.tot_days = (self.max_year - self.min_year) * 365 + (self.max_year - self.min_year) // 4
+        self.tot_hours = self.tot_days * 24
+        self.tot_minutes = self.tot_hours * 60
+       
+    def encode(self, dt):
+        if dt is not None:
+            dt = DictUtils.parse_datetime_direct(dt)
+        ts= datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute)
+        # 2) Build a feature vector 'x' with informative features
+        x = []
+        # --- Feature Engineering ---
+        # Feature 0: Normalized Year
+        # Scale year to be roughly between 0 and 1
+        norm_year = (ts.year - self.min_year) / self.year_range
+        # Already converting to tensor here, this is fine:
+        x.append(torch.tensor(norm_year, dtype=torch.float32))
+        # Features 1, 2: Cyclical Month (0-11)
+        # Using ts.month - 1 to get a 0-based index for the 12 months
+        month_norm = (ts.month - 1) / 12.0 
+        month_angle_float = 2 * torch.pi * month_norm
+
+        # Convert float angle to tensor BEFORE sin/cos
+        month_angle_tensor = torch.tensor(month_angle_float, dtype=torch.float32)
+
+        x.append(torch.tensor(month_norm, dtype=torch.float32))
+        x.append(torch.sin(month_angle_tensor))
+        x.append(torch.cos(month_angle_tensor))
+        # Features 3, 4: Cyclical Day of Month (0-30 approx)
+        # Using ts.day - 1 for 0-based index. Normalizing by 31 is an approximation.
+        day_norm = (ts.day - 1) / 31.0
+        day_angle_float = 2 * torch.pi * day_norm
+        # Convert float angle to tensor BEFORE sin/cos
+        day_angle_tensor = torch.tensor(day_angle_float, dtype=torch.float32)
+        x.append(torch.tensor(day_norm, dtype=torch.float32))
+        x.append(torch.sin(day_angle_tensor))
+        x.append(torch.cos(day_angle_tensor))
+        # Features 5, 6: Cyclical Hour (0-23)
+        hour_norm = ts.hour / 24.0
+        hour_angle_float = 2 * torch.pi * hour_norm
+        # Convert float angle to tensor BEFORE sin/cos
+        hour_angle_tensor = torch.tensor(hour_angle_float, dtype=torch.float32)
+        x.append(torch.tensor(hour_norm, dtype=torch.float32))
+        x.append(torch.sin(hour_angle_tensor))
+        x.append(torch.cos(hour_angle_tensor))
+        # Features 7, 8: Cyclical Minute (0-59)
+
+        # Features 7, 8: Cyclical Minute (0-59)
+        minute_norm = ts.minute / 60.0
+        minute_angle_float = 2 * torch.pi * minute_norm
+        # Convert float angle to tensor BEFORE sin/cos
+        minute_angle_tensor = torch.tensor(minute_angle_float, dtype=torch.float32)
+        x.append(torch.tensor(minute_norm, dtype=torch.float32))
+        x.append(torch.sin(minute_angle_tensor))
+        x.append(torch.cos(minute_angle_tensor))
+
+        tot_days_since_start = (ts.year - self.min_year) * 365 + (ts.year - self.min_year) // 4 + (ts.month - 1) * 31 + ts.day - 1
+        tot_minutes_since_start = tot_days_since_start * 24 * 60 + ts.hour * 60 + ts.minute
+        norm_minutes_since_start = tot_minutes_since_start / self.tot_minutes
+        total_minutes_angle = torch.tensor(2 * torch.pi * norm_minutes_since_start, dtype=torch.float32)
+        x.append(torch.tensor(norm_minutes_since_start, dtype=torch.float32))
+        x.append(torch.sin(total_minutes_angle))
+        x.append(torch.cos(total_minutes_angle))
+        
+        v = torch.stack(x, dim=0)
+        return v
+        
+    def decode(self, v):
+        v = {self.info_map[i]: float(v[i]) for i in range(len(v))}
+        y = v["year_norm"] * self.year_range + self.min_year
+        m = v["month_norm"] * 12 + 1
+        d = v["day_norm"] * 31 + 1
+        h = v["hour_norm"] * 24
+        mi = v["minute_norm"] * 60
+        dt = datetime(round(y), round(m), round(d), round(h), round(mi))
+        return dt
+    
+    def decode_batch_logits(self, logits: dict, minute_bin_size: int):
+        """
+        logits: dict of tensors, each of shape [B, num_classes] for heads
+        minute_bin_size: the bin size used when training (so we can invert the minute bin)
+        Returns: list of datetime objects of length B
+        """
+        # 1) pick predicted class indices for each head
+        preds = { head: torch.argmax(logits[head], dim=1).cpu().numpy()
+                  for head in ["year","month","day","hour","minute"]
+                  if head in logits }
+
+        B = next(iter(preds.values())).shape[0]
+        out = []
+        for i in range(B):
+            # 2) build the “normalized feature” vector v of length len(info_map)
+            v = torch.zeros(len(self.info_map), dtype=torch.float32)
+            # year_norm lives at index where info_map==“year_norm” (should be 0)
+            v[0] = (preds["year"][i]) / self.year_range
+            # month_norm at index 1
+            v[1] = (preds["month"][i]) / 12.0
+            # day_norm at index 4
+            v[4] = (preds["day"][i]) / 31.0
+            # hour_norm at index 7
+            v[7] = (preds["hour"][i]) / 24.0
+            # minute_norm at index 10
+            v[10] = (preds["minute"][i] * minute_bin_size) / 60.0
+
+            # 3) decode single vector
+            dt = self.decode(v)
+            out.append(dt)
+        return out
 # Our previously defined rich time range encoding class.
 class RichTimeRangeEncoding:
     def __init__(self, start, end=None, frequency=None):
@@ -12,12 +218,92 @@ class RichTimeRangeEncoding:
         Args:
             start (datetime): The starting datetime.
             end (datetime, optional): The ending datetime. Defaults to start.
-            frequency (timedelta, optional): The recording frequency (e.g., every 10 minutes).
+            frequency (seconds): The recording frequency (e.g., every 10 minutes).
+            
         """
         self.start = start
         self.end = end if end is not None else start
-        self.frequency = frequency  # frequency should be a timedelta
+        self.frequency = frequency or 60*10
+        self.max_year = 2029
+        self.min_year = 1990
+        self.year_range = self.max_year - self.min_year
+        self.map = {
+            "start_timestamp": 0,
+            "middle_timestamp": 1,
+            "end_timestamp": 2,
+            "freq_feature": 3,
+            "start_enc": 4,
+            "middle_enc": 5,
+            "end_enc": 6,
+            "duration": 7,
+            "type_flag": 8
+        }
 
+    def datetime_encode(self, dt):
+        if dt is not None:
+            dt = DictUtils.parse_datetime_str(dt)
+        ts= datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute)
+        # 2) Build a feature vector 'x' with informative features
+        x = torch.zeros(self.input_dim, dtype=torch.float32) # Use float32
+
+        # --- Feature Engineering ---
+        i =0
+        # Feature 0: Normalized Year
+        # Scale year to be roughly between 0 and 1
+        norm_year = (ts.year - self.min_year) / self.year_range
+        # Already converting to tensor here, this is fine:
+        x[i] = torch.tensor(norm_year, dtype=torch.float32)
+        i += 1
+        # Features 1, 2: Cyclical Month (0-11)
+        # Using ts.month - 1 to get a 0-based index for the 12 months
+        month_norm = (ts.month - 1) / 12.0 
+        month_angle_float = 2 * torch.pi * month_norm
+
+        # Convert float angle to tensor BEFORE sin/cos
+        month_angle_tensor = torch.tensor(month_angle_float, dtype=torch.float32)
+
+        x[i] = torch.tensor(month_norm, dtype=torch.float32)
+        i += 1
+        x[i] = torch.sin(month_angle_tensor)
+        i += 1
+        x[i] = torch.cos(month_angle_tensor)
+        i += 1
+        # Features 3, 4: Cyclical Day of Month (0-30 approx)
+        # Using ts.day - 1 for 0-based index. Normalizing by 31 is an approximation.
+        day_norm = (ts.day - 1) / 31.0
+        day_angle_float = 2 * torch.pi * day_norm
+        # Convert float angle to tensor BEFORE sin/cos
+        day_angle_tensor = torch.tensor(day_angle_float, dtype=torch.float32)
+        x[i] = torch.tensor(day_norm, dtype=torch.float32)
+        i += 1
+        x[i] = torch.sin(day_angle_tensor)
+        i += 1
+        x[i] = torch.cos(day_angle_tensor)
+        i += 1
+        # Features 5, 6: Cyclical Hour (0-23)
+        hour_norm = ts.hour / 24.0
+        hour_angle_float = 2 * torch.pi * hour_norm
+        # Convert float angle to tensor BEFORE sin/cos
+        hour_angle_tensor = torch.tensor(hour_angle_float, dtype=torch.float32)
+        x[i] = torch.tensor(hour_norm, dtype=torch.float32)
+        i += 1
+        x[i] = torch.sin(hour_angle_tensor)
+        i += 1
+        x[i] = torch.cos(hour_angle_tensor)
+        i += 1
+
+        # Features 7, 8: Cyclical Minute (0-59)
+        minute_norm = ts.minute / 60.0
+        minute_angle_float = 2 * torch.pi * minute_norm
+        # Convert float angle to tensor BEFORE sin/cos
+        minute_angle_tensor = torch.tensor(minute_angle_float, dtype=torch.float32)
+        x[i] = torch.tensor(minute_norm, dtype=torch.float32)
+        i += 1
+        x[i] = torch.sin(minute_angle_tensor)
+        i += 1
+        x[i] = torch.cos(minute_angle_tensor)
+        
+        return x
     def cyclic_encode(self, dt):
         """
         Encode a datetime into cyclic features for time-of-day, day-of-week, and day-of-year.
@@ -51,11 +337,27 @@ class RichTimeRangeEncoding:
                          weekday_sin, weekday_cos,
                          day_year_sin, day_year_cos])
     
+    def normalize_timestamp(self, timestamp):
+      
+        return (timestamp - self.min_timestamp) / (self.max_timestamp - self.min_timestamp)
+    
+    def decode_timestamp(self, normalized_timestamp):
+        return normalized_timestamp * (self.max_timestamp - self.min_timestamp) + self.min_timestamp
+    
+
+    def get_encoding(self):
+        return self.datetime_encode(self.start)
+    # def update_map(self, map, key, index):
+    #     map[key] = index
+    #     else:
+    #         map[key] = map[list(map.keys())[-1]] + 1
+    #     return map
     def get_encoding(self):
         """
         Create the rich time-range embedding.
         
         This embedding includes:
+          - Normalized timestamps (3 dimensions)
           - Cyclic encoding for the start time (6 dimensions)
           - Cyclic encoding for the middle of the range (6 dimensions)
           - Cyclic encoding for the end time (6 dimensions)
@@ -66,6 +368,8 @@ class RichTimeRangeEncoding:
         Total dimensions: 6 + 6 + 6 + 1 + 1 + 2 = 22.
         """
         # Encode start and end times
+        start_timestamp = self.normalize_timestamp(float(self.start.timestamp()))
+        end_timestamp = self.normalize_timestamp(float(self.end.timestamp()))
         start_enc = self.cyclic_encode(self.start)
         end_enc = self.cyclic_encode(self.end)
         
@@ -73,24 +377,53 @@ class RichTimeRangeEncoding:
         middle_timestamp = self.start.timestamp() + (self.end.timestamp() - self.start.timestamp()) / 2.0
         middle_dt = datetime.fromtimestamp(middle_timestamp)
         middle_enc = self.cyclic_encode(middle_dt)
-        
+        middle_timestamp = self.normalize_timestamp(middle_timestamp)
         # Compute the duration of the time range (in seconds)
-        duration = (self.end - self.start).total_seconds()
-        
+        duration = (self.end.timestamp() - self.start.timestamp())/(60*60*24*365)
+     
         # Encode the frequency:
-        if self.frequency is not None:
-            freq_seconds = self.frequency.total_seconds()
-            freq_feature = np.log(freq_seconds + 1)  # +1 to avoid log(0)
-        else:
-            freq_feature = 0.0
+
+
+        freq_feature = FrequencyEncoding().encode(self.frequency, dim_size=None)
+        #Define a type flag: [1, 0] for a point (duration zero) and [0, 1] for a range.
+        flags= np.array([1, 0]) if duration == 0 else np.array([0, 1])
+        # Concatenate all features into one vector
+        normalized_timestamps = [start_timestamp, middle_timestamp, end_timestamp]
+        # log_timestamp = [np.log10(start_timestamp), np.log10(middle_timestamp), np.log10(end_timestamp)]
+        offset = 0
         
-        # Define a type flag: [1, 0] for a point (duration zero) and [0, 1] for a range.
-        type_flag = np.array([1, 0]) if duration == 0 else np.array([0, 1])
-        
-        # Concatenate all features into one vector.
-        encoding = np.concatenate([start_enc, middle_enc, end_enc, np.array([duration, freq_feature]), type_flag])
+        # keys = list(self.map.keys())
+        # offset = 0
+        # for i, feature in enumerate(encoding):
+        #     if isinstance(feature, float):
+        #         offset += 1
+        #     else:
+        #         offset += len(feature)
+        #     self.map[keys[i]] = offset
+        # print(self.map)
+        encoding = [normalized_timestamps, freq_feature, start_enc, middle_enc, end_enc, [duration],  flags]
+        encoding = np.concatenate(encoding)
         return encoding
 
+    def decode(self, encoding):
+        start_timestamp = self.decode_timestamp(self.map["start_timestamp"])
+        middle_timestamp = self.decode_timestamp(self.map["middle_timestamp"])
+        end_timestamp = self.decode_timestamp(self.map["end_timestamp"])
+        start_dt = datetime.fromtimestamp(start_timestamp)
+        middle_dt = datetime.fromtimestamp(middle_timestamp)
+        end_dt = datetime.fromtimestamp(end_timestamp)
+      
+        frequency = FrequencyEncoding().decode(encoding[self.map["freq_feature"]:self.map["start_enc"]])
+        ret = {
+            "start_dt": start_dt,
+            "middle_dt": middle_dt,
+            "end_dt": end_dt,
+            "frequency": frequency,
+            "duration": start_timestamp - end_timestamp
+        }
+        return ret
+
+        
 # New class that combines location with time to produce a "Location Time Embedding."
 class LocationTimeEmbedding:
     def __init__(self, lat, lon, start_time, frequency=None):
@@ -195,13 +528,28 @@ class LocationTimeEmbedding:
 
 # Example usage:
 if __name__ == "__main__":
-    # Example location: San Francisco (latitude, longitude) and current GMT time.
-    lat = 37.7749
-    lon = -122.4194
-    start_time = datetime.utcnow()  # Using GMT (UTC) time.
-    frequency = timedelta(minutes=10)  # Example recording frequency.
+    time_stamp_encoder = TimeStampEncoder()
+    encoding = time_stamp_encoder.encode(datetime(2021, 3, 12, 17, 22))
+    print(encoding)
+    print(len(encoding))
+    decoded = time_stamp_encoder.decode(encoding)
+    print(decoded)
+    # start_time = datetime(2021, 1, 1)
+    # end_time = datetime(2021, 1, 21, 1, 0, 0)
+    # time_range_encoding = RichTimeRangeEncoding(start=start_time, end=end_time)
+    # encoding = time_range_encoding.get_encoding()
+    # print(encoding)
+    # print(len(encoding))
+    # decoded = time_range_encoding.decode(encoding)
+
+
+    # # # Example location: San Francisco (latitude, longitude) and current GMT time.
+    # lat = 37.7749
+    # lon = -122.4194
+    # start_time = datetime.utcnow()  # Using GMT (UTC) time.
+    # frequency = timedelta(minutes=10)  # Example recording frequency.
     
-    loc_time_embed = LocationTimeEmbedding(lat=lat, lon=lon, start_time=start_time, frequency=frequency)
-    embedding = loc_time_embed.get_embedding()
+    # loc_time_embed = LocationTimeEmbedding(lat=lat, lon=lon, start_time=start_time, frequency=frequency)
+    # embedding = loc_time_embed.get_embedding()
     
-    print("Location Time Embedding:\n", embedding)
+    # print("Location Time Embedding:\n", embedding)

@@ -132,6 +132,8 @@ class VOKSearchableDB:
         # normalize and compute similarity
         db_slice = F.normalize(db_slice, dim=-1)
         q = F.normalize(query.to(self.device), dim=-1)
+        if q.ndim == 1:
+            q = q.unsqueeze(0)
         assert q.shape[1] == db_slice.shape[1], "Query dim mismatch"
 
         sim = torch.matmul(q, db_slice.T)           # [Q, N]

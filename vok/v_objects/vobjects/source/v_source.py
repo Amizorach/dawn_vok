@@ -21,7 +21,12 @@ class VOKSource(VOKObject):
         return MongoUtils.get_collection(db_name=cls.get_db_name(), collection_name=cls.get_collection_name()).find_one({'source_id': source_id})
     
     def __init__(self,  source_id=None, name=None, provider_id=None, source_type='weather_station', location=None):
-        uid = IDUtils.get_id(['ds', source_id])
+
+        if source_id and source_id.startswith('ds'):
+            uid = source_id
+        else:
+            uid = IDUtils.get_id(['ds', source_id])
+        print(uid)
         super().__init__(uid=uid, obj_type='source', name=name, syntax_directives=[])
         self.provider_id = provider_id
         self.source_id = source_id
@@ -30,7 +35,12 @@ class VOKSource(VOKObject):
         self.location = None
         if location:
             self.parse_location(location)
-        
+    
+    # def get_id(self) -> str:
+    #     return IDUtils.get_id([
+    #         self.obj_type,
+    #         self.source_id
+    #     ])
     def parse_location(self, location):
 
         if not location:
@@ -72,6 +82,7 @@ class VOKSource(VOKObject):
         return ret
     
     def populate_from_dict(self, di):
+        super().populate_from_dict(di)
         self.provider_id = di.get('provider_id', self.provider_id)
         self.source_id = di.get('source_id', self.source_id)
         self.source_type = di.get('source_type', self.source_type)

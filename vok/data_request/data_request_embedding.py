@@ -19,7 +19,11 @@ from dawn_vok.vok.data_request.test_dr import POCEncoderCosineModel
 # from dawn_vok.vok.embedding.base.discrete_embedding import SyntaxEmbedding
 from dawn_vok.vok.embedding.cyclic_emb.frequency_embedding import FrequencyEmbedding
 from dawn_vok.vok.embedding.cyclic_emb.timestamp_encoder import TimestampDecoder, TimestampEncoder
+from dawn_vok.vok.embedding.embedding_paramater.v_embedding_paramater import VOKEmbeddingParamater
 # from dawn_vok.vok.embedding.emb_param.embedding_paramater import SensorTypeEmbeddingParamater
+
+
+    
 
 
 class DataRequestEmbedding:

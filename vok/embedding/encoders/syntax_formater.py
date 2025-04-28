@@ -1,7 +1,6 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from dawn_vok.vok.embedding.syntax.vocab import DVocab
 
 
 class SyntaxFormater:
@@ -36,12 +35,5 @@ class SyntaxFormater:
 
     
         
-if __name__ == "__main__":
-    # col = MongoUtils.get_collection(db_name=EmbeddedDiscreteValue.get_db_name(), collection_name=EmbeddedDiscreteValue.get_collection_name())
-    # if col != None:
-    #     col.delete_many({})
-    builder = SyntaxFormater()
-    vocab = DVocab.get_syntax_vocab()
-    builder.format_syntax(vocab)
-    print(builder.encode_map)
+
  

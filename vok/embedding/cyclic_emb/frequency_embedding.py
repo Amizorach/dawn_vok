@@ -4,7 +4,7 @@ class FrequencyEmbedding:
     def __init__(self, base_unit: float = 60.0):
         self.base_unit = base_unit
 
-    def encode(self, seconds: float) -> np.ndarray:
+    def encode(self, seconds: float, dim_size: int = 64) -> np.ndarray:
         seconds=float(seconds)
         seconds = max(seconds, 1.0)
         raw = np.clip(seconds / 86400.0, 0.0, 1.0)
@@ -17,7 +17,10 @@ class FrequencyEmbedding:
             sincos.append(np.sin(seconds / f))
             sincos.append(np.cos(seconds / f))
 
-        return np.array([raw, log_f / 10, log_ratio / 10, bucket] + sincos)
+        ret = np.array([raw, log_f / 10, log_ratio / 10, bucket] + sincos)
+        if ret.shape[0] < dim_size:
+            ret = np.concatenate([ret, np.zeros(dim_size - ret.shape[0])])
+        return ret
 
     def decode(self, embedding: np.ndarray) -> float:
         raw = embedding[0]

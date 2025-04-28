@@ -1,7 +1,7 @@
 from datetime import datetime
 
 import numpy as np
-
+import torch
 class DictUtils:
     DATETIME_FORMATS = ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"]
 
@@ -33,12 +33,12 @@ class DictUtils:
         return current
 
     @classmethod
-    def parse_datetime_direct(cls, dt, formats=None):
+    def parse_datetime_direct(cls, dt, formats=None, default=None):
         """
         Safely parse a datetime value from a datetime object or a string.
         """
         if dt is None:
-            return None
+            return default
         if isinstance(dt, datetime):
             return dt
         if isinstance(dt, (int, float)):
@@ -52,7 +52,7 @@ class DictUtils:
                 return datetime.strptime(dt, fmt)
             except (ValueError, TypeError):
                 continue
-        return None
+        return default
 
     @classmethod
     def parse_datetime(cls, di: dict, path: str, default=None, formats=None, split='.'):
@@ -143,4 +143,35 @@ class DictUtils:
                 di[k] = v.tolist()
             elif isinstance(v, dict):
                 di[k] = DictUtils.np_to_list(v)
+        return di
+
+    @staticmethod
+    def torch_to_list(di: dict):
+        """
+        Convert all torch tensors in a dictionary to lists.
+        """
+        for k, v in di.items():
+            if isinstance(v, torch.Tensor):
+                di[k] = v.tolist()
+                # for i in di[k]:
+                #     if isinstance(i, torch.Tensor):
+                #         di[k] = [i.tolist() for i in di[k]]
+            elif isinstance(v, dict):
+                di[k] = DictUtils.torch_to_list(v)
+        return di
+
+    @staticmethod
+    def fix_dict(di: dict):
+        """
+        Fix the dictionary to be a dictionary of dictionaries.
+        """
+        for k, v in di.items():
+            if isinstance(v, dict):
+                di[k] = DictUtils.fix_dict(v)   
+            elif isinstance(v, list):
+                di[k] = [DictUtils.fix_dict(i) for i in v]
+            elif isinstance(v, torch.Tensor):
+                di[k] = v.tolist()
+            elif isinstance(v, np.ndarray):
+                di[k] = v.tolist()
         return di

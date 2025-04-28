@@ -40,13 +40,13 @@ if __name__ == "__main__":
         data_list.append(d[0])
     print(data_list[0].shape)
     scheme_id = f'lat_{latent_dim}'
-    inf_dataset = SyntaxEmbeddingReducerInferenceDataset(query_list)
-    encoded = trainer.inference(inf_dataset)
-    for i, se in enumerate(se_reducer.embedding):
-        pprint.pp(se.embedding.keys())
-        se.embedding[scheme_id]= encoded[i].tolist()
-        se.save_to_db()
-    print(encoded.shape)
+    # inf_dataset = SyntaxEmbeddingReducerInferenceDataset(query_list)
+    # encoded = trainer.inference(inf_dataset)
+    # for i, se in enumerate(se_reducer.embedding):
+    #     pprint.pp(se.embedding.keys())
+    #     se.embedding[scheme_id]= encoded[i].tolist()
+    #     se.save_to_db()
+    # print(encoded.shape)
     # print(reconstructed[0].shape)
     # print(encoded[0].shape)
     # print(dataset[0][0].shape)

@@ -3,7 +3,10 @@ from dawn_vok.db.mongo_utils import MongoUtils
 from dawn_vok.utils.dict_utils import DictUtils
 from dawn_vok.utils.id_utils import IDUtils
 from dawn_vok.vok.dobjects.dobj.d_sensor_type import SensorType
-from dawn_vok.vok.embedding.base.discrete_embedding import SyntaxEmbedding
+from dawn_vok.vok.embedding.base.discrete_embedding import DiscreteEmbedding, SyntaxEmbedding
+from dawn_vok.vok.v_objects.vobjects.measurments.v_measurment_unit import MeasurementUnit
+from dawn_vok.vok.v_objects.vobjects.sensors.v_base_sensor_type import VOKBaseSensorType
+from dawn_vok.vok.v_objects.vobjects.sensors.v_sensor_type import VOKSensorType
 from dawn_vok.vok.v_objects.vok_object import VOKObject
 
 
@@ -12,83 +15,9 @@ from dawn_vok.vok.v_objects.vok_object import VOKObject
 import torch
 import torch.nn as nn
 
-class HeaderBuilder(nn.Module):
-    def __init__(
-        self,
-        max_num_unit_types=50,
-        max_seq_len=24,
-        max_unit_len=6,
-        unit_type_dim=8,
-        position_dim=4,
-    ):
-        super().__init__()
-        assert unit_type_dim + 2 * position_dim <= 16, "Header overflow risk"
+import torch
+import torch.nn as nn
 
-        self.unit_type_embed = nn.Embedding(max_num_unit_types, unit_type_dim)
-        self.global_pos_embed = nn.Embedding(max_seq_len, position_dim)
-        self.unit_pos_embed = nn.Embedding(max_unit_len, position_dim)
-
-    def populate_from_dict(self, di):
-        self.unit_type_embed = nn.Embedding(di['max_num_unit_types'], di['unit_type_dim'])
-        self.global_pos_embed = nn.Embedding(di['max_seq_len'], di['position_dim'])
-        self.unit_pos_embed = nn.Embedding(di['max_unit_len'], di['position_dim'])
-        self.create_base_embeddings(di)
-        return self
-    
-      
-        
-
-    def create_base_embedding(self, di, dim_size=32):
-        unit_type_id = di.get('unit_type_id', None)
-        global_position = di.get('global_position', None)
-        unit_position = di.get('unit_position', None)
-        unit_length = di.get('unit_length', None)
-        relative_indices = di.get('relative_indices', None)
-        is_first = di.get('is_first', None)
-        is_last = di.get('is_last', None)
-        is_group_start = unit_position == 0
-        has_data = di.get('has_data', None)
-
-        # Embeddings
-        unit_type_vec = self.unit_type_embed(unit_type_id)        # (B, N, unit_type_dim)
-        global_pos_vec = self.global_pos_embed(global_position)   # (B, N, position_dim)
-        unit_pos_vec = self.unit_pos_embed(unit_position)         # (B, N, position_dim)
-        
-        # Scalar metadata   
-        scalar_meta = torch.stack([
-            unit_length,
-            relative_indices,
-            is_first,
-            is_last,
-            is_group_start,
-            has_data
-        ], dim=-1)  # (B, N, 6)
-
-        # Pad remaining space up to 10 scalar dimensions
-
-        # Full 32D header
-        header = torch.cat([
-            unit_type_vec,
-            global_pos_vec,
-            unit_pos_vec,
-            scalar_meta,
-        ], dim=-1)  # (B, N, 32)
-        if header.shape[-1] < self.dim_size:
-            pad = torch.zeros(B, N, self.dim_size - header.shape[-1], device=header.device)
-            header = torch.cat([header, pad], dim=-1)
-        return header
-
-    def forward(
-        self,
-        unit_type_ids, global_positions, unit_positions,
-        unit_lengths, relative_indices,
-        is_first, is_last, is_group_start, has_data
-    ):
-        return self.reconstruct(
-            unit_type_ids, global_positions, unit_positions,
-            unit_lengths, relative_indices,
-            is_first, is_last, is_group_start, has_data
-        )
 
 class EmbeddingParamater(VOKObject):
     @classmethod
@@ -106,7 +35,12 @@ class EmbeddingParamater(VOKObject):
         self.embedding_manager_config = embedding_manager_config or {}
         self.latents = {}
         super().__init__(uid=self.uid, obj_type='embedding_paramater')
-
+        _latents = {
+            'measurement_unit': torch.tensor([0]*64),
+            'base_sensor_type': torch.tensor([0]*64),
+            'sensor_type': torch.tensor([0]*64),
+            'sensor_info': torch.tensor([0]*64),
+        }
     def to_dict(self):
         ret = super().to_dict()
         ret['param_type'] = self.param_type
@@ -222,5 +156,9 @@ class SensorTypeEmbeddingParamater(EmbeddingParamater):
         SyntaxEmbedding.update_missing_embeddings(generator_id='syntax_single_embedding', save=True)
         SyntaxEmbedding.update_syntax_embedding(generator_id='syntax_single_embedding', save=True)
 
-if __name__ == '__main__':
-    SensorTypeEmbeddingParamater.update_all_sensor_types()
+# if __name__ == '__main__':
+#     # SensorTypeEmbeddingParamater.update_all_sensor_types()
+#     eb = EmbeddingParamaterBuilder('sensor_type')
+#     eb.build()
+#     eb.save_to_db()
+#     exit()

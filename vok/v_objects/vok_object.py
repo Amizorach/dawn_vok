@@ -32,11 +32,15 @@ class VOKObject:
             'obj_type': self.obj_type,
             'uid': self.uid,
             'system_uid': self.system_uid,
-            'meta_data': self.meta_data,
             'name': self.name,
-            'syntax_directives': self.syntax_directives,
-            'latent_schemes': self.latent_schemes
         }
+        if self.syntax_directives:
+            ret['syntax_directives'] = self.syntax_directives
+        if self.latent_schemes:
+            ret['latent_schemes'] = self.latent_schemes
+        if self.meta_data:
+            ret['meta_data'] = self.meta_data
+        
         # serialize timestamp
         DictUtils.put_datetime(ret, 'updated_at', self.updated_at)
         return ret
